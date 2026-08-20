@@ -18,6 +18,7 @@ const FIELD_GROUPS = [
       { key: 'nav_instalaciones_label', label: 'Etiqueta "Instalaciones"', type: 'text' },
       { key: 'nav_servicios_label', label: 'Etiqueta "Servicios"', type: 'text' },
       { key: 'nav_ubicacion_label', label: 'Etiqueta "Ubicación"', type: 'text' },
+      { key: 'nav_telefono_label', label: 'Etiqueta "Teléfono" (lleva al pie de página)', type: 'text' },
       { key: 'nav_contacto_label', label: 'Etiqueta "Contacto"', type: 'text' }
     ]
   },

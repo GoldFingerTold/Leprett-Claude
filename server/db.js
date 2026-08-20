@@ -85,6 +85,7 @@ const DEFAULT_CONTENT = {
   nav_instalaciones_label: 'Instalaciones',
   nav_servicios_label: 'Servicios',
   nav_ubicacion_label: 'Ubicación',
+  nav_telefono_label: 'Teléfono',
   nav_contacto_label: 'Contacto',
 
   banner_image: '/img/seed/banner-1.jpg',
