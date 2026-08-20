@@ -237,7 +237,9 @@ async function loadSite() {
 
   const phones = [content.contact_phone, content.contact_phone_2].filter(Boolean).join(' / ');
   const emails = [content.contact_email, content.contact_email_2].filter(Boolean).join(' / ');
-  setText('footer-contact', [content.contact_person, phones, emails].filter(Boolean).join(' — '));
+  const contactLine = [content.contact_person, phones, emails].filter(Boolean).join(' — ');
+  setText('footer-contact', contactLine);
+  setText('topbar-contact', contactLine);
 
   const banner = document.getElementById('banner-image');
   if (banner) banner.src = resolveImageUrl(content.banner_image) || '';
