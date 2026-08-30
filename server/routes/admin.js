@@ -3,29 +3,16 @@
 // eventos. Se montan detrás de auth.requireAdmin en index.js.
 
 const express = require('express');
-const path = require('path');
-const fs = require('fs');
 const multer = require('multer');
 const db = require('../db');
+const { uploadBuffer } = require('../cloudinary');
 
 const router = express.Router();
 
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
-    const name = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    cb(null, name);
-  }
-});
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 }, // 8MB
   fileFilter: (req, file, cb) => {
     if (!ALLOWED_TYPES.has(file.mimetype)) {
@@ -34,6 +21,18 @@ const upload = multer({
     cb(null, true);
   }
 });
+
+// El resto de esta ruta sigue siendo síncrona (SQLite), pero subir a Cloudinary es
+// async - esta rutina atrapa el error a mano ya que este archivo no tiene un
+// asyncHandler/error-middleware genérico como los sitios ya migrados a Mongo.
+async function uploadToCloudinary(req, res, folder) {
+  try {
+    return await uploadBuffer(req.file.buffer, folder);
+  } catch (err) {
+    res.status(500).json({ error: 'No se pudo subir la imagen: ' + err.message });
+    return null;
+  }
+}
 
 function withMulterErrors(field) {
   const mw = upload.single(field);
@@ -72,9 +71,11 @@ router.put('/content', (req, res) => {
 
 // Reemplazar una imagen fija del contenido (banner_image o escuela_image), o subir
 // una imagen suelta y devolver su URL para usarla donde haga falta.
-router.post('/content/image', withMulterErrors('image'), (req, res) => {
+router.post('/content/image', withMulterErrors('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
-  const url = `/uploads/${req.file.filename}`;
+  const cloudResult = await uploadToCloudinary(req, res, 'leprett/content');
+  if (!cloudResult) return;
+  const url = cloudResult.secure_url;
 
   const { key } = req.body || {};
   if (key) {
@@ -95,9 +96,11 @@ router.get('/gallery', (req, res) => {
   res.json({ items });
 });
 
-router.post('/gallery', withMulterErrors('image'), (req, res) => {
+router.post('/gallery', withMulterErrors('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
-  const url = `/uploads/${req.file.filename}`;
+  const cloudResult = await uploadToCloudinary(req, res, 'leprett/gallery');
+  if (!cloudResult) return;
+  const url = cloudResult.secure_url;
   const alt = (req.body && req.body.alt) || '';
 
   const maxPos = db.prepare('SELECT COALESCE(MAX(position), -1) AS m FROM gallery_images').get().m;
@@ -115,12 +118,8 @@ router.delete('/gallery/:id', (req, res) => {
 
   db.prepare('DELETE FROM gallery_images WHERE id = ?').run(id);
 
-  // Si el archivo vive en /uploads (subido desde el panel), lo borramos también.
-  // Las imágenes semilla en /img/seed se dejan intactas.
-  if (row.url.startsWith('/uploads/')) {
-    const filePath = path.join(UPLOAD_DIR, path.basename(row.url));
-    fs.unlink(filePath, () => {});
-  }
+  // Nota: la imagen queda huérfana en Cloudinary (no se borra desde acá) - a esta
+  // escala no representa un costo real (plan gratis de 25GB).
 
   res.json({ ok: true });
 });
