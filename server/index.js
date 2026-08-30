@@ -42,8 +42,16 @@ app.use(
 );
 
 // Archivos estáticos: el sitio público, las imágenes semilla y lo subido desde el panel.
-app.use(express.static(path.join(__dirname, '..', 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Cache-Control explícito: sin esto, la CDN de Hostinger (HCDN) cachea el CSS/JS por
+// muchísimo tiempo (más de una hora, visto en la práctica) sin importar el ?v=N de la
+// URL ni que el archivo cambie - queda sirviendo una versión vieja a todo el mundo.
+const staticOptions = {
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-store, must-revalidate');
+  }
+};
+app.use(express.static(path.join(__dirname, '..', 'public'), staticOptions));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), staticOptions));
 
 // API pública
 app.use('/api/content', contentRoutes);
