@@ -5,7 +5,9 @@ const express = require('express');
 const session = require('express-session');
 const cors = require('cors');
 
+const db = require('./db');
 const auth = require('./auth');
+const asyncHandler = require('./asyncHandler');
 const contentRoutes = require('./routes/content');
 const consultasRoutes = require('./routes/consultas');
 const adminRoutes = require('./routes/admin');
@@ -58,20 +60,35 @@ app.use('/api/content', contentRoutes);
 app.use('/api/consultas', consultasRoutes);
 
 // Login / logout del panel
-app.post('/api/admin/login', auth.login);
+app.post('/api/admin/login', asyncHandler(auth.login));
 app.post('/api/admin/logout', auth.logout);
 app.get('/api/admin/session', (req, res) => {
   res.json({ isAdmin: Boolean(req.session && req.session.isAdmin) });
 });
-app.post('/api/admin/recover', auth.recover);
+app.post('/api/admin/recover', asyncHandler(auth.recover));
 
 // Cambio de contraseña del panel (requiere sesión activa)
-app.put('/api/admin/password', auth.requireAdmin, auth.changePassword);
+app.put('/api/admin/password', auth.requireAdmin, asyncHandler(auth.changePassword));
 
 // Resto de la API de administración, protegida
 app.use('/api/admin', auth.requireAdmin, adminRoutes);
 
-app.listen(PORT, () => {
-  console.log(`Sitio de Salones Leprett corriendo en http://localhost:${PORT}`);
-  console.log(`Panel de administración en http://localhost:${PORT}/admin`);
+// Handler de errores: cualquier ruta async que falle (por ejemplo, un problema de
+// conexión con Mongo) cae acá en vez de colgar la respuesta o tirar el stack crudo.
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Error interno del servidor.' });
+});
+
+async function start() {
+  await db.connect();
+  app.listen(PORT, () => {
+    console.log(`Sitio de Salones Leprett corriendo en http://localhost:${PORT}`);
+    console.log(`Panel de administración en http://localhost:${PORT}/admin`);
+  });
+}
+
+start().catch((err) => {
+  console.error('No se pudo arrancar el servidor:', err);
+  process.exit(1);
 });

@@ -1,79 +1,39 @@
-// Conexión a SQLite + esquema + contenido semilla.
-// Mismo patrón que sitio-lecoin-recepciones/server/db.js (node:sqlite, sin dependencias
-// nativas). Se ejecuta una sola vez al arrancar: si la base ya existe, no vuelve a
-// sembrar nada.
+// Conexión a MongoDB Atlas + contenido semilla. Migrado desde node:sqlite (mismo motivo
+// que los demás sitios): el disco de la app en Hostinger no sobrevive a un redeploy, así
+// que una base de archivo único como SQLite puede perderse entera en el próximo deploy.
 
-const path = require('path');
-const fs = require('fs');
-const { DatabaseSync } = require('node:sqlite');
+const { MongoClient, ObjectId } = require('mongodb');
 const bcrypt = require('bcryptjs');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-
-const db = new DatabaseSync(path.join(DATA_DIR, 'site.db'));
-db.exec('PRAGMA journal_mode = WAL');
-
-function transaction(fn) {
-  return (...args) => {
-    db.exec('BEGIN');
-    try {
-      const result = fn(...args);
-      db.exec('COMMIT');
-      return result;
-    } catch (err) {
-      db.exec('ROLLBACK');
-      throw err;
-    }
-  };
+const uri = process.env.MONGODB_URI;
+if (!uri) {
+  throw new Error(
+    'Falta la variable de entorno MONGODB_URI (el connection string de MongoDB Atlas). ' +
+    'Copiá .env.example a .env y completala antes de arrancar el servidor.'
+  );
 }
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS content (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL DEFAULT ''
-  );
+const client = new MongoClient(uri);
+let db = null;
 
-  CREATE TABLE IF NOT EXISTS gallery_images (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    url TEXT NOT NULL,
-    alt_text TEXT NOT NULL DEFAULT '',
-    position INTEGER NOT NULL DEFAULT 0
-  );
+function getDb() {
+  if (!db) throw new Error('La base de datos todavía no está conectada. Llamá a connect() primero.');
+  return db;
+}
 
-  CREATE TABLE IF NOT EXISTS social_links (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    platform TEXT NOT NULL,
-    label TEXT NOT NULL,
-    url TEXT NOT NULL,
-    visible INTEGER NOT NULL DEFAULT 1,
-    position INTEGER NOT NULL DEFAULT 0
-  );
+async function connect() {
+  await client.connect();
+  db = client.db();
+  await ensureIndexes();
+  await seedIfEmpty();
+  console.log('Conectado a MongoDB Atlas.');
+}
 
-  -- Reemplaza al "contact_messages" genérico de los otros sitios: acá el formulario del
-  -- sitio original ya pedía datos puntuales de la consulta (tipo de evento, fecha,
-  -- invitados), mucho más útiles para un salón de fiestas que un mensaje libre.
-  CREATE TABLE IF NOT EXISTS consultas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    agasajado TEXT NOT NULL,
-    solicitante TEXT NOT NULL,
-    localidad TEXT NOT NULL DEFAULT '',
-    telefono TEXT NOT NULL,
-    celular TEXT NOT NULL DEFAULT '',
-    email TEXT NOT NULL,
-    tipo_evento TEXT NOT NULL DEFAULT '',
-    fecha_evento TEXT NOT NULL DEFAULT '',
-    cantidad_invitados TEXT NOT NULL DEFAULT '',
-    comentarios TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    is_read INTEGER NOT NULL DEFAULT 0
-  );
-
-  CREATE TABLE IF NOT EXISTS admin_user (
-    username TEXT PRIMARY KEY,
-    password_hash TEXT NOT NULL
-  );
-`);
+async function ensureIndexes() {
+  await db.collection('gallery_images').createIndex({ position: 1 });
+  await db.collection('social_links').createIndex({ position: 1 });
+  await db.collection('consultas').createIndex({ created_at: -1 });
+}
 
 // --- Contenido semilla (texto real del sitio actual de Salones Leprett) ---
 const DEFAULT_CONTENT = {
@@ -141,49 +101,55 @@ const DEFAULT_CONTENT = {
   contact_person: 'Alicia Vivanco',
   contact_phone: '11-6895-1017',
   contact_phone_2: '11-5517-3337',
-  contact_email: 'info@salonesleprett.com.ar',
-  contact_email_2: 'alicia@salonesleprett.com.ar',
+  // Dominio .com (no .com.ar): el sitio se mudó a salonesleprett.com - estas direcciones
+  // se ven en el footer del sitio, tienen que coincidir con el dominio real.
+  contact_email: 'info@salonesleprett.com',
+  contact_email_2: 'alicia@salonesleprett.com',
 
   footer_text: 'Salones Leprett'
 };
 
-function seedIfEmpty() {
-  const contentCount = db.prepare('SELECT COUNT(*) AS n FROM content').get().n;
-  if (contentCount === 0) {
-    const insert = db.prepare('INSERT INTO content (key, value) VALUES (?, ?)');
-    const insertMany = transaction((entries) => {
-      for (const [key, value] of entries) insert.run(key, String(value));
-    });
-    insertMany(Object.entries(DEFAULT_CONTENT));
+const DEFAULT_GALLERY = (() => {
+  const items = [
+    { url: '/img/seed/salon-arcos.jpg', alt_text: 'Salón de los Arcos' },
+    { url: '/img/seed/salon-jardin.jpg', alt_text: 'Salón Jardín de los Arcos' },
+    { url: '/img/seed/salon-espejos.jpg', alt_text: 'Salón de los Espejos' },
+    { url: '/img/seed/salon-cristal.jpg', alt_text: 'Salón Cristal' },
+    { url: '/img/seed/salon-luces.jpg', alt_text: 'Salón de las Luces' }
+  ];
+  const galleryNums = [1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97, 101, 105];
+  galleryNums.forEach((n) => {
+    items.push({ url: `/img/seed/galeria-${n}.jpg`, alt_text: `Salones Leprett ${n}` });
+  });
+  return items;
+})();
+
+async function seedIfEmpty() {
+  const contentDoc = await db.collection('content').findOne({ _id: 'main' });
+  if (!contentDoc) {
+    await db.collection('content').insertOne({ _id: 'main', ...DEFAULT_CONTENT });
+  } else {
+    const missing = {};
+    for (const [key, value] of Object.entries(DEFAULT_CONTENT)) {
+      if (!(key in contentDoc)) missing[key] = value;
+    }
+    if (Object.keys(missing).length > 0) {
+      await db.collection('content').updateOne({ _id: 'main' }, { $set: missing });
+    }
   }
 
-  const galleryCount = db.prepare('SELECT COUNT(*) AS n FROM gallery_images').get().n;
+  const galleryCount = await db.collection('gallery_images').countDocuments();
   if (galleryCount === 0) {
-    const insert = db.prepare('INSERT INTO gallery_images (url, alt_text, position) VALUES (?, ?, ?)');
-    const insertMany = transaction((items) => {
-      items.forEach((item, i) => insert.run(item.url, item.alt, i));
-    });
-
-    const items = [
-      { url: '/img/seed/salon-arcos.jpg', alt: 'Salón de los Arcos' },
-      { url: '/img/seed/salon-jardin.jpg', alt: 'Salón Jardín de los Arcos' },
-      { url: '/img/seed/salon-espejos.jpg', alt: 'Salón de los Espejos' },
-      { url: '/img/seed/salon-cristal.jpg', alt: 'Salón Cristal' },
-      { url: '/img/seed/salon-luces.jpg', alt: 'Salón de las Luces' }
-    ];
-    const galleryNums = [1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97, 101, 105];
-    galleryNums.forEach((n) => {
-      items.push({ url: `/img/seed/galeria-${n}.jpg`, alt: `Salones Leprett ${n}` });
-    });
-
-    insertMany(items);
+    await db.collection('gallery_images').insertMany(
+      DEFAULT_GALLERY.map((item, i) => ({ ...item, position: i }))
+    );
   }
 
-  const adminCount = db.prepare('SELECT COUNT(*) AS n FROM admin_user').get().n;
-  if (adminCount === 0) {
+  const adminDoc = await db.collection('admin_user').findOne({ _id: 'admin' });
+  if (!adminDoc) {
     const password = process.env.ADMIN_PASSWORD || 'cambiar-esta-clave';
     const hash = bcrypt.hashSync(password, 10);
-    db.prepare('INSERT INTO admin_user (username, password_hash) VALUES (?, ?)').run('admin', hash);
+    await db.collection('admin_user').insertOne({ _id: 'admin', password_hash: hash });
     if (!process.env.ADMIN_PASSWORD) {
       console.warn(
         '[aviso] No hay ADMIN_PASSWORD en .env: se creó el usuario admin con la clave por defecto ' +
@@ -193,8 +159,4 @@ function seedIfEmpty() {
   }
 }
 
-seedIfEmpty();
-
-db.transaction = transaction;
-
-module.exports = db;
+module.exports = { connect, getDb, ObjectId };

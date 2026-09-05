@@ -2,25 +2,33 @@
 
 const express = require('express');
 const db = require('../db');
+const asyncHandler = require('../asyncHandler');
 
 const router = express.Router();
 
-router.get('/', (req, res) => {
-  const rows = db.prepare('SELECT key, value FROM content').all();
-  const content = {};
-  for (const row of rows) content[row.key] = row.value;
+router.get('/', asyncHandler(async (req, res) => {
+  const mongo = db.getDb();
 
-  const gallery = db
-    .prepare('SELECT id, url, alt_text AS alt FROM gallery_images ORDER BY position ASC, id ASC')
-    .all();
+  const contentDoc = await mongo.collection('content').findOne({ _id: 'main' });
+  const { _id, ...content } = contentDoc || {};
 
-  const social = db
-    .prepare(
-      'SELECT id, platform, label, url FROM social_links WHERE visible = 1 ORDER BY position ASC, id ASC'
-    )
-    .all();
+  const gallery = await mongo
+    .collection('gallery_images')
+    .find({}, { projection: { url: 1, alt_text: 1 } })
+    .sort({ position: 1, _id: 1 })
+    .toArray();
 
-  res.json({ content, gallery, social });
-});
+  const social = await mongo
+    .collection('social_links')
+    .find({ visible: true }, { projection: { platform: 1, label: 1, url: 1 } })
+    .sort({ position: 1, _id: 1 })
+    .toArray();
+
+  res.json({
+    content,
+    gallery: gallery.map(({ _id, url, alt_text }) => ({ id: _id, url, alt: alt_text })),
+    social: social.map(({ _id, platform, label, url }) => ({ id: _id, platform, label, url }))
+  });
+}));
 
 module.exports = router;

@@ -32,7 +32,7 @@ function clearAttempts(ip) {
   attemptsByIp.delete(ip);
 }
 
-function login(req, res) {
+async function login(req, res) {
   const ip = req.ip;
   if (isRateLimited(ip)) {
     return res.status(429).json({ error: 'Demasiados intentos. Probá de nuevo en unos minutos.' });
@@ -43,7 +43,7 @@ function login(req, res) {
     return res.status(400).json({ error: 'Falta la contraseña.' });
   }
 
-  const user = db.prepare('SELECT * FROM admin_user WHERE username = ?').get('admin');
+  const user = await db.getDb().collection('admin_user').findOne({ _id: 'admin' });
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     registerFailedAttempt(ip);
     return res.status(401).json({ error: 'Contraseña incorrecta.' });
@@ -62,7 +62,7 @@ function logout(req, res) {
 
 // Cambiar la contraseña del panel. Solo se llega acá ya logueado (requireAdmin), pero
 // igual se pide la contraseña actual como confirmación extra antes de reemplazarla.
-function changePassword(req, res) {
+async function changePassword(req, res) {
   const { currentPassword, newPassword } = req.body || {};
 
   if (!currentPassword || !newPassword) {
@@ -72,13 +72,13 @@ function changePassword(req, res) {
     return res.status(400).json({ error: 'La contraseña nueva tiene que tener al menos 8 caracteres.' });
   }
 
-  const user = db.prepare('SELECT * FROM admin_user WHERE username = ?').get('admin');
+  const user = await db.getDb().collection('admin_user').findOne({ _id: 'admin' });
   if (!user || !bcrypt.compareSync(currentPassword, user.password_hash)) {
     return res.status(401).json({ error: 'La contraseña actual no es correcta.' });
   }
 
   const newHash = bcrypt.hashSync(newPassword, 10);
-  db.prepare('UPDATE admin_user SET password_hash = ? WHERE username = ?').run(newHash, 'admin');
+  await db.getDb().collection('admin_user').updateOne({ _id: 'admin' }, { $set: { password_hash: newHash } });
 
   res.json({ ok: true });
 }
@@ -93,7 +93,7 @@ function requireAdmin(req, res, next) {
 // panel de tu hosting cuando la necesites, y reiniciar la app para que tome el valor
 // nuevo). Solo funciona si ADMIN_RECOVERY_KEY está definida - si no, la vía queda
 // deshabilitada por completo, para no dejar una puerta trasera abierta sin querer.
-function recover(req, res) {
+async function recover(req, res) {
   const ip = req.ip;
   if (isRateLimited(ip)) {
     return res.status(429).json({ error: 'Demasiados intentos. Probá de nuevo en unos minutos.' });
@@ -113,7 +113,7 @@ function recover(req, res) {
   clearAttempts(ip);
   const newPassword = process.env.ADMIN_PASSWORD || 'cambiar-esta-clave';
   const newHash = bcrypt.hashSync(newPassword, 10);
-  db.prepare('UPDATE admin_user SET password_hash = ? WHERE username = ?').run(newHash, 'admin');
+  await db.getDb().collection('admin_user').updateOne({ _id: 'admin' }, { $set: { password_hash: newHash } });
 
   res.json({ ok: true });
 }
