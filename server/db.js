@@ -33,6 +33,8 @@ async function ensureIndexes() {
   await db.collection('gallery_images').createIndex({ position: 1 });
   await db.collection('social_links').createIndex({ position: 1 });
   await db.collection('consultas').createIndex({ created_at: -1 });
+  await db.collection('product_categories').createIndex({ position: 1 });
+  await db.collection('products').createIndex({ category_id: 1, position: 1 });
 }
 
 // --- Contenido semilla (texto real del sitio actual de Salones Leprett) ---
@@ -46,6 +48,7 @@ const DEFAULT_CONTENT = {
   nav_servicios_label: 'Servicios',
   nav_ubicacion_label: 'Ubicación',
   nav_telefono_label: 'Teléfono',
+  nav_productos_label: 'Precios',
   nav_contacto_label: 'Contacto',
 
   banner_image: '/img/seed/banner-1.jpg',
@@ -95,6 +98,9 @@ const DEFAULT_CONTENT = {
   ubicacion_text: 'Se encuentra en el barrio de Monserrat, de fácil acceso, en pleno centro de la Ciudad.',
   ubicacion_address: 'Sáenz Peña 739, CABA',
   ubicacion_map_image: '/img/seed/mapa.jpg',
+
+  productos_heading: 'Precios y paquetes',
+  productos_subheading: 'Escaneá para ver',
 
   contact_heading: 'Contacto',
   contact_subheading: 'Contanos sobre tu evento y te respondemos a la brevedad.',

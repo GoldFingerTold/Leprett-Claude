@@ -258,6 +258,9 @@ async function loadSite() {
   setText('servicios-subheading', content.servicios_subheading);
   renderServicios(content.servicios_text);
 
+  setText('productos-heading', content.productos_heading);
+  setText('productos-subheading', content.productos_subheading);
+
   setText('ubicacion-heading', content.ubicacion_heading);
   setText('ubicacion-subheading', content.ubicacion_subheading);
   setText('ubicacion-text', content.ubicacion_text);

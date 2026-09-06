@@ -10,6 +10,7 @@ const auth = require('./auth');
 const asyncHandler = require('./asyncHandler');
 const contentRoutes = require('./routes/content');
 const consultasRoutes = require('./routes/consultas');
+const productsRoutes = require('./routes/products');
 const adminRoutes = require('./routes/admin');
 
 const app = express();
@@ -55,9 +56,16 @@ const staticOptions = {
 app.use(express.static(path.join(__dirname, '..', 'public'), staticOptions));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), staticOptions));
 
+// Página pública de precios/paquetes (a la que apunta el QR descargable desde el panel) -
+// URL limpia sin ".html", así queda prolija impresa/escaneada.
+app.get('/productos', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'productos.html'));
+});
+
 // API pública
 app.use('/api/content', contentRoutes);
 app.use('/api/consultas', consultasRoutes);
+app.use('/api/products', productsRoutes);
 
 // Login / logout del panel
 app.post('/api/admin/login', asyncHandler(auth.login));

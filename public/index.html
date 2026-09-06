@@ -49,7 +49,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/style.css?v=3">
+<link rel="stylesheet" href="/css/style.css?v=4">
 </head>
 <body>
 
@@ -64,6 +64,7 @@
       <li><a href="#nosotros" data-nav-label="nav_nosotros_label">Nosotros</a></li>
       <li><a href="#instalaciones" data-nav-label="nav_instalaciones_label">Instalaciones</a></li>
       <li><a href="#servicios" data-nav-label="nav_servicios_label">Servicios</a></li>
+      <li><a href="/productos" data-nav-label="nav_productos_label">Precios</a></li>
       <li><a href="#ubicacion" data-nav-label="nav_ubicacion_label">Ubicación</a></li>
       <li><a href="#footer" data-nav-label="nav_telefono_label">Teléfono</a></li>
       <li><a href="#contacto" data-nav-label="nav_contacto_label" class="nav-cta">Contacto</a></li>
@@ -117,6 +118,21 @@
         <h2 class="section-title" id="servicios-heading"></h2>
       </div>
       <div class="servicios-list" id="servicios-list"></div>
+    </div>
+  </section>
+
+  <section id="productos-qr" class="section">
+    <div class="section-inner productos-qr-inner">
+      <div class="productos-qr-copy">
+        <p class="kicker" id="productos-subheading">Escaneá para ver</p>
+        <h2 class="section-title" id="productos-heading">Precios y paquetes</h2>
+        <p class="section-text" style="margin-left:0;">
+          Escaneá el código con la cámara del celular, o
+          <a href="/productos" style="text-decoration: underline;">hacé clic acá</a>
+          si estás en la computadora.
+        </p>
+      </div>
+      <img src="/api/products/qr" alt="Código QR con precios y paquetes" class="productos-qr-image" loading="lazy">
     </div>
   </section>
 
@@ -233,7 +249,7 @@
   <button class="lightbox-nav lightbox-next" id="lightbox-next" aria-label="Siguiente">&#8250;</button>
 </div>
 
-<script src="/js/config.js?v=3"></script>
-<script src="/js/main.js?v=3"></script>
+<script src="/js/config.js?v=4"></script>
+<script src="/js/main.js?v=4"></script>
 </body>
 </html>
