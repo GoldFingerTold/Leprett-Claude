@@ -35,6 +35,8 @@ async function ensureIndexes() {
   await db.collection('consultas').createIndex({ created_at: -1 });
   await db.collection('product_categories').createIndex({ position: 1 });
   await db.collection('products').createIndex({ category_id: 1, position: 1 });
+  await db.collection('org_gallery_images').createIndex({ position: 1 });
+  await db.collection('org_contact_messages').createIndex({ created_at: -1 });
 }
 
 // --- Contenido semilla (texto real del sitio actual de Salones Leprett) ---
@@ -115,6 +117,50 @@ const DEFAULT_CONTENT = {
   footer_text: 'Salones Leprett'
 };
 
+// --- Contenido semilla de organizacion.salonesleprett.com (sub-sitio de Alicia, mismo
+// panel de administración, contenido totalmente separado del principal) - texto de
+// relleno a propósito: Hugo va a cargar el contenido real desde el panel, pestaña
+// "Organización", apenas esté listo el DNS del subdominio. ---
+const DEFAULT_ORG_CONTENT = {
+  site_name: 'Leprett — Organización de Eventos',
+  site_tagline: 'Organización integral de tu evento, de punta a punta',
+
+  nav_home_label: 'Inicio',
+  nav_nosotros_label: 'Nosotros',
+  nav_servicios_label: 'Servicios',
+  nav_imagenes_label: 'Imágenes',
+  nav_telefono_label: 'Teléfono',
+  nav_contacto_label: 'Contacto',
+
+  banner_image: '',
+  banner_title: 'Organización de Eventos',
+  banner_subtitle: 'Coordinamos cada detalle de tu evento social o corporativo, de principio a fin.',
+
+  nosotros_heading: 'Nosotros',
+  nosotros_subheading: 'Quiénes somos',
+  nosotros_image: '',
+  nosotros_text: 'Contenido de ejemplo: acá va la presentación del servicio de organización de eventos. Se edita desde el panel, pestaña "Organización".',
+
+  servicios_heading: 'Servicios',
+  servicios_subheading: 'Qué incluye',
+  servicios_text: [
+    'Coordinación integral del evento.',
+    'Selección y contratación de proveedores.',
+    'Planificación de cronograma y logística.',
+    'Acompañamiento el día del evento.'
+  ].join('\n\n'),
+
+  imagenes_heading: 'Imágenes',
+  imagenes_subheading: 'Algunos de nuestros trabajos',
+
+  contact_heading: 'Contacto',
+  contact_subheading: 'Contanos sobre tu evento y te respondemos a la brevedad.',
+  contact_phone: '11-5517-3337',
+  contact_email: 'alicia@salonesleprett.com',
+
+  footer_text: 'Leprett — Organización de Eventos'
+};
+
 const DEFAULT_GALLERY = (() => {
   const items = [
     { url: '/img/seed/salon-arcos.jpg', alt_text: 'Salón de los Arcos' },
@@ -149,6 +195,19 @@ async function seedIfEmpty() {
     await db.collection('gallery_images').insertMany(
       DEFAULT_GALLERY.map((item, i) => ({ ...item, position: i }))
     );
+  }
+
+  const orgContentDoc = await db.collection('org_content').findOne({ _id: 'main' });
+  if (!orgContentDoc) {
+    await db.collection('org_content').insertOne({ _id: 'main', ...DEFAULT_ORG_CONTENT });
+  } else {
+    const missing = {};
+    for (const [key, value] of Object.entries(DEFAULT_ORG_CONTENT)) {
+      if (!(key in orgContentDoc)) missing[key] = value;
+    }
+    if (Object.keys(missing).length > 0) {
+      await db.collection('org_content').updateOne({ _id: 'main' }, { $set: missing });
+    }
   }
 
   const adminDoc = await db.collection('admin_user').findOne({ _id: 'admin' });

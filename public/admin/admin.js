@@ -83,6 +83,69 @@ const FIELD_GROUPS = [
   }
 ];
 
+// Textos de organizacion.salonesleprett.com - sub-sitio con su propio contenido, editado
+// con el mismo mecanismo que FIELD_GROUPS pero contra /api/admin/org-content.
+const ORG_FIELD_GROUPS = [
+  {
+    title: 'General',
+    fields: [
+      { key: 'site_name', label: 'Nombre del sitio', type: 'text' },
+      { key: 'site_tagline', label: 'Bajada', type: 'text' },
+      { key: 'footer_text', label: 'Texto del pie de página', type: 'text' }
+    ]
+  },
+  {
+    title: 'Menú de navegación',
+    fields: [
+      { key: 'nav_home_label', label: 'Etiqueta "Inicio"', type: 'text' },
+      { key: 'nav_nosotros_label', label: 'Etiqueta "Nosotros"', type: 'text' },
+      { key: 'nav_servicios_label', label: 'Etiqueta "Servicios"', type: 'text' },
+      { key: 'nav_imagenes_label', label: 'Etiqueta "Imágenes"', type: 'text' },
+      { key: 'nav_telefono_label', label: 'Etiqueta "Teléfono" (lleva al pie de página)', type: 'text' },
+      { key: 'nav_contacto_label', label: 'Etiqueta "Contacto"', type: 'text' }
+    ]
+  },
+  {
+    title: 'Portada',
+    fields: [
+      { key: 'banner_title', label: 'Título de la portada', type: 'text' },
+      { key: 'banner_subtitle', label: 'Bajada de la portada', type: 'textarea' }
+    ]
+  },
+  {
+    title: 'Nosotros',
+    fields: [
+      { key: 'nosotros_heading', label: 'Título', type: 'text' },
+      { key: 'nosotros_subheading', label: 'Antetítulo', type: 'text' },
+      { key: 'nosotros_text', label: 'Texto (dejá una línea en blanco entre párrafos)', type: 'textarea' }
+    ]
+  },
+  {
+    title: 'Servicios',
+    fields: [
+      { key: 'servicios_heading', label: 'Título', type: 'text' },
+      { key: 'servicios_subheading', label: 'Antetítulo', type: 'text' },
+      { key: 'servicios_text', label: 'Servicios (uno por párrafo - dejá una línea en blanco entre cada uno)', type: 'textarea' }
+    ]
+  },
+  {
+    title: 'Imágenes',
+    fields: [
+      { key: 'imagenes_heading', label: 'Título', type: 'text' },
+      { key: 'imagenes_subheading', label: 'Antetítulo', type: 'text' }
+    ]
+  },
+  {
+    title: 'Contacto',
+    fields: [
+      { key: 'contact_heading', label: 'Título', type: 'text' },
+      { key: 'contact_subheading', label: 'Bajada', type: 'text' },
+      { key: 'contact_phone', label: 'Teléfono', type: 'text' },
+      { key: 'contact_email', label: 'Email', type: 'text' }
+    ]
+  }
+];
+
 function apiUrl(path) {
   return (window.API_BASE || '') + path;
 }
@@ -127,6 +190,7 @@ function showApp() {
   loadRedesTab();
   loadConsultasTab();
   loadProductosTab();
+  loadOrganizacionTab();
   initPasswordForm();
 }
 
@@ -810,6 +874,241 @@ async function moveProductItem(products, index, delta) {
   [order[index], order[newIndex]] = [order[newIndex], order[index]];
   await api('/api/admin/products/reorder', { method: 'PUT', body: JSON.stringify({ order }) });
   await renderCategoriesList();
+}
+
+// ---------- Organización (organizacion.salonesleprett.com) ----------
+
+async function loadOrganizacionTab() {
+  await loadOrgContentForm();
+  await loadOrgImageReplacers();
+  await loadOrgGalleryAdmin();
+  await loadOrgMessagesTab();
+
+  const uploadInput = document.getElementById('org-gallery-upload-input');
+  uploadInput.onchange = async () => {
+    const file = uploadInput.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+      await api('/api/admin/org-gallery', { method: 'POST', body: formData });
+      await loadOrgGalleryAdmin();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      uploadInput.value = '';
+    }
+  };
+}
+
+async function loadOrgContentForm() {
+  const form = document.getElementById('org-content-form');
+  const { content } = await api('/api/admin/org-content');
+
+  form.innerHTML = '';
+  ORG_FIELD_GROUPS.forEach((group) => {
+    const groupEl = document.createElement('div');
+    groupEl.className = 'field-group';
+    const h3 = document.createElement('h3');
+    h3.textContent = group.title;
+    groupEl.appendChild(h3);
+
+    group.fields.forEach((field) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'field';
+      const label = document.createElement('label');
+      label.textContent = field.label;
+      label.setAttribute('for', `org-field-${field.key}`);
+      wrap.appendChild(label);
+
+      const input = document.createElement(field.type === 'textarea' ? 'textarea' : 'input');
+      input.id = `org-field-${field.key}`;
+      input.name = field.key;
+      if (field.type !== 'textarea') input.type = 'text';
+      input.value = content[field.key] || '';
+      wrap.appendChild(input);
+
+      groupEl.appendChild(wrap);
+    });
+
+    form.appendChild(groupEl);
+  });
+
+  const saveBar = document.createElement('div');
+  saveBar.className = 'save-bar';
+  const status = document.createElement('span');
+  status.id = 'org-content-save-status';
+  status.className = 'form-status';
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'submit';
+  saveBtn.className = 'btn btn-primary';
+  saveBtn.textContent = 'Guardar textos';
+  saveBar.appendChild(status);
+  saveBar.appendChild(saveBtn);
+  form.appendChild(saveBar);
+
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const status = document.getElementById('org-content-save-status');
+    status.textContent = 'Guardando...';
+    status.className = 'form-status';
+    const updates = {};
+    ORG_FIELD_GROUPS.forEach((group) => {
+      group.fields.forEach((field) => {
+        updates[field.key] = document.getElementById(`org-field-${field.key}`).value;
+      });
+    });
+    try {
+      await api('/api/admin/org-content', { method: 'PUT', body: JSON.stringify(updates) });
+      status.textContent = 'Guardado ✓';
+      status.className = 'form-status ok';
+    } catch (err) {
+      status.textContent = err.message;
+      status.className = 'form-status error';
+    }
+  };
+}
+
+// Imágenes fijas (portada, "Nosotros") - usan data-org-key en vez de data-key para no
+// mezclarse con los .image-replace del sitio principal (loadFotosTab).
+async function loadOrgImageReplacers() {
+  const { content } = await api('/api/admin/org-content');
+
+  document.querySelectorAll('[data-org-key]').forEach((el) => {
+    const key = el.dataset.orgKey;
+    const preview = el.querySelector('.image-preview');
+    preview.src = resolveImageUrl(content[key]) || '';
+
+    const input = el.querySelector('.image-input');
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('key', key);
+      try {
+        const data = await api('/api/admin/org-content/image', { method: 'POST', body: formData });
+        preview.src = resolveImageUrl(data.url);
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        input.value = '';
+      }
+    };
+  });
+}
+
+async function loadOrgGalleryAdmin() {
+  const grid = document.getElementById('org-gallery-admin-grid');
+  const { items } = await api('/api/admin/org-gallery');
+
+  if (items.length === 0) {
+    grid.innerHTML = '<p class="empty-state">Todavía no hay fotos en la galería.</p>';
+    return;
+  }
+
+  grid.innerHTML = '';
+  items.forEach((item, index) => {
+    const cell = document.createElement('div');
+    cell.className = 'gallery-admin-item';
+
+    const img = document.createElement('img');
+    img.src = resolveImageUrl(item.url);
+    img.alt = item.alt || '';
+    cell.appendChild(img);
+
+    const actions = document.createElement('div');
+    actions.className = 'gallery-admin-item-actions';
+
+    const upBtn = document.createElement('button');
+    upBtn.type = 'button';
+    upBtn.textContent = '↑';
+    upBtn.disabled = index === 0;
+    upBtn.onclick = () => moveOrgGalleryItem(items, index, -1);
+
+    const downBtn = document.createElement('button');
+    downBtn.type = 'button';
+    downBtn.textContent = '↓';
+    downBtn.disabled = index === items.length - 1;
+    downBtn.onclick = () => moveOrgGalleryItem(items, index, 1);
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.textContent = 'Borrar';
+    delBtn.className = 'danger';
+    delBtn.onclick = async () => {
+      if (!confirm('¿Borrar esta foto de la galería?')) return;
+      await api(`/api/admin/org-gallery/${item.id}`, { method: 'DELETE' });
+      await loadOrgGalleryAdmin();
+    };
+
+    actions.appendChild(upBtn);
+    actions.appendChild(downBtn);
+    actions.appendChild(delBtn);
+    cell.appendChild(actions);
+    grid.appendChild(cell);
+  });
+}
+
+async function moveOrgGalleryItem(items, index, delta) {
+  const newIndex = index + delta;
+  if (newIndex < 0 || newIndex >= items.length) return;
+  const order = items.map((i) => i.id);
+  [order[index], order[newIndex]] = [order[newIndex], order[index]];
+  await api('/api/admin/org-gallery/reorder', { method: 'PUT', body: JSON.stringify({ order }) });
+  await loadOrgGalleryAdmin();
+}
+
+async function loadOrgMessagesTab() {
+  const list = document.getElementById('org-messages-list');
+  const { items } = await api('/api/admin/org-messages');
+
+  if (items.length === 0) {
+    list.innerHTML = '<p class="empty-state">Todavía no llegó ningún mensaje.</p>';
+    return;
+  }
+
+  list.innerHTML = '';
+  items.forEach((msg) => {
+    const el = document.createElement('div');
+    el.className = 'message-item' + (msg.is_read ? '' : ' unread');
+
+    const date = new Date(msg.created_at).toLocaleString('es-AR');
+
+    el.innerHTML = `
+      <div class="message-item-head">
+        <strong>${escapeHtml(msg.name)}</strong>
+        <span class="message-item-meta">${date}</span>
+      </div>
+      <div class="message-item-meta">${escapeHtml(msg.email)}${msg.phone ? ' · ' + escapeHtml(msg.phone) : ''}</div>
+      <p>${escapeHtml(msg.message)}</p>
+    `;
+
+    const actions = document.createElement('div');
+    actions.className = 'message-item-actions';
+
+    if (!msg.is_read) {
+      const readBtn = document.createElement('button');
+      readBtn.textContent = 'Marcar como leído';
+      readBtn.onclick = async () => {
+        await api(`/api/admin/org-messages/${msg.id}/read`, { method: 'PUT' });
+        await loadOrgMessagesTab();
+      };
+      actions.appendChild(readBtn);
+    }
+
+    const delBtn = document.createElement('button');
+    delBtn.textContent = 'Borrar';
+    delBtn.onclick = async () => {
+      if (!confirm('¿Borrar este mensaje?')) return;
+      await api(`/api/admin/org-messages/${msg.id}`, { method: 'DELETE' });
+      await loadOrgMessagesTab();
+    };
+    actions.appendChild(delBtn);
+
+    el.appendChild(actions);
+    list.appendChild(el);
+  });
 }
 
 // ---------- Cuenta (cambiar contraseña) ----------

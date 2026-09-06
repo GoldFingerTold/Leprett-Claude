@@ -349,4 +349,98 @@ router.delete('/products/:id', asyncHandler(async (req, res) => {
 // poder verlo cualquier visitante sin sesión, ya que se muestra también en la página
 // principal del sitio.
 
+// ---------- Organización (organizacion.salonesleprett.com) ----------
+// Mismo panel/login que el sitio principal, pero contenido, galería y mensajes
+// totalmente separados (colecciones org_*), ya que es un sub-sitio con su propio texto.
+
+router.get('/org-content', asyncHandler(async (req, res) => {
+  const contentDoc = await db.getDb().collection('org_content').findOne({ _id: 'main' });
+  const { _id, ...content } = contentDoc || {};
+  res.json({ content });
+}));
+
+router.put('/org-content', asyncHandler(async (req, res) => {
+  const updates = req.body || {};
+  const keys = Object.keys(updates);
+  if (keys.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar.' });
+
+  const clean = {};
+  for (const key of keys) clean[key] = String(updates[key] ?? '');
+
+  await db.getDb().collection('org_content').updateOne({ _id: 'main' }, { $set: clean }, { upsert: true });
+
+  res.json({ ok: true });
+}));
+
+router.post('/org-content/image', withMulterErrors('image'), asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
+  const cloudResult = await uploadBuffer(req.file.buffer, 'leprett/organizacion');
+  const url = cloudResult.secure_url;
+
+  const { key } = req.body || {};
+  if (key) {
+    await db.getDb().collection('org_content').updateOne({ _id: 'main' }, { $set: { [key]: url } }, { upsert: true });
+  }
+
+  res.json({ ok: true, url });
+}));
+
+router.get('/org-gallery', asyncHandler(async (req, res) => {
+  const items = await db.getDb().collection('org_gallery_images').find().sort({ position: 1, _id: 1 }).toArray();
+  res.json({ items: items.map(({ _id, url, alt_text, position }) => ({ id: _id, url, alt: alt_text, position })) });
+}));
+
+router.post('/org-gallery', withMulterErrors('image'), asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
+  const cloudResult = await uploadBuffer(req.file.buffer, 'leprett/organizacion/galeria');
+  const url = cloudResult.secure_url;
+  const alt = (req.body && req.body.alt) || '';
+
+  const mongo = db.getDb();
+  const last = await mongo.collection('org_gallery_images').find().sort({ position: -1 }).limit(1).toArray();
+  const nextPos = last.length > 0 ? last[0].position + 1 : 0;
+
+  const inserted = await mongo.collection('org_gallery_images').insertOne({ url, alt_text: alt, position: nextPos });
+
+  res.json({ ok: true, id: inserted.insertedId, url });
+}));
+
+router.delete('/org-gallery/:id', asyncHandler(async (req, res) => {
+  const result = await db.getDb().collection('org_gallery_images').deleteOne({ _id: new ObjectId(req.params.id) });
+  if (result.deletedCount === 0) return res.status(404).json({ error: 'No existe esa imagen.' });
+  res.json({ ok: true });
+}));
+
+router.put('/org-gallery/reorder', asyncHandler(async (req, res) => {
+  const { order } = req.body || {};
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'Falta el array "order".' });
+
+  const ops = order.map((id, index) => ({
+    updateOne: { filter: { _id: new ObjectId(id) }, update: { $set: { position: index } } }
+  }));
+  if (ops.length > 0) await db.getDb().collection('org_gallery_images').bulkWrite(ops);
+
+  res.json({ ok: true });
+}));
+
+router.get('/org-messages', asyncHandler(async (req, res) => {
+  const items = await db.getDb().collection('org_contact_messages').find().sort({ created_at: -1 }).toArray();
+  res.json({ items: items.map(({ _id, ...rest }) => ({ id: _id, ...rest })) });
+}));
+
+router.put('/org-messages/:id/read', asyncHandler(async (req, res) => {
+  const result = await db.getDb().collection('org_contact_messages').updateOne(
+    { _id: new ObjectId(req.params.id) },
+    { $set: { is_read: true } }
+  );
+  if (result.matchedCount === 0) return res.status(404).json({ error: 'No existe ese mensaje.' });
+  res.json({ ok: true });
+}));
+
+router.delete('/org-messages/:id', asyncHandler(async (req, res) => {
+  const result = await db.getDb().collection('org_contact_messages').deleteOne({ _id: new ObjectId(req.params.id) });
+  if (result.deletedCount === 0) return res.status(404).json({ error: 'No existe ese mensaje.' });
+  res.json({ ok: true });
+}));
+
 module.exports = router;

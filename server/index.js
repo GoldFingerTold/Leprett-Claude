@@ -11,7 +11,14 @@ const asyncHandler = require('./asyncHandler');
 const contentRoutes = require('./routes/content');
 const consultasRoutes = require('./routes/consultas');
 const productsRoutes = require('./routes/products');
+const orgContentRoutes = require('./routes/orgContent');
+const orgContactRoutes = require('./routes/orgContact');
 const adminRoutes = require('./routes/admin');
+
+// Sub-sitio de Alicia en su propio subdominio, servido por esta misma app (mismo panel
+// de administración) en vez de un "Deploy Web App" aparte - no consume otro cupo del
+// plan de Hostinger. Se distingue por el hostname de la request, no por la ruta.
+const ORG_HOST = 'organizacion.salonesleprett.com';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -44,6 +51,16 @@ app.use(
   })
 );
 
+// El subdominio de Alicia tiene su propia portada - tiene que resolverse ANTES que
+// express.static de abajo, porque express.static serviría public/index.html (el sitio
+// principal) para cualquier "/" sin importar el hostname si llegara primero.
+app.get('/', (req, res, next) => {
+  if (req.hostname === ORG_HOST) {
+    return res.sendFile(path.join(__dirname, '..', 'public', 'organizacion', 'index.html'));
+  }
+  next();
+});
+
 // Archivos estáticos: el sitio público, las imágenes semilla y lo subido desde el panel.
 // Cache-Control explícito: sin esto, la CDN de Hostinger (HCDN) cachea el CSS/JS por
 // muchísimo tiempo (más de una hora, visto en la práctica) sin importar el ?v=N de la
@@ -66,6 +83,8 @@ app.get('/productos', (req, res) => {
 app.use('/api/content', contentRoutes);
 app.use('/api/consultas', consultasRoutes);
 app.use('/api/products', productsRoutes);
+app.use('/api/org-content', orgContentRoutes);
+app.use('/api/org-contact', orgContactRoutes);
 
 // Login / logout del panel
 app.post('/api/admin/login', asyncHandler(auth.login));

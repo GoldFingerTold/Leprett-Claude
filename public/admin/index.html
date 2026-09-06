@@ -56,6 +56,7 @@
     <button class="admin-tab" data-tab="redes">Redes sociales</button>
     <button class="admin-tab" data-tab="productos">Precios</button>
     <button class="admin-tab" data-tab="consultas">Consultas</button>
+    <button class="admin-tab" data-tab="organizacion">Organización</button>
     <button class="admin-tab" data-tab="cuenta">Cuenta</button>
   </nav>
 
@@ -154,6 +155,57 @@
         <h2>Consultas de eventos</h2>
         <p class="admin-hint">Lo que la gente envía desde el formulario de consulta del sitio.</p>
         <div id="consultas-list" class="consultas-list"></div>
+      </div>
+    </section>
+
+    <!-- ---------- ORGANIZACIÓN (organizacion.salonesleprett.com) ---------- -->
+    <section id="tab-organizacion" class="admin-panel">
+      <p class="admin-hint" style="margin-bottom: 20px;">
+        Edita el sub-sitio <code>organizacion.salonesleprett.com</code> - contenido
+        totalmente separado del sitio principal, mismo panel.
+      </p>
+
+      <div class="admin-card">
+        <h2>Textos</h2>
+        <form id="org-content-form"></form>
+      </div>
+
+      <div class="admin-card">
+        <h2>Foto principal (portada)</h2>
+        <div class="image-replace" data-org-key="banner_image">
+          <img class="image-preview" alt="Portada actual">
+          <label class="btn-ghost file-btn">
+            Cambiar imagen
+            <input type="file" accept="image/*" class="image-input">
+          </label>
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <h2>Foto de "Nosotros"</h2>
+        <div class="image-replace" data-org-key="nosotros_image">
+          <img class="image-preview" alt="Foto de Nosotros actual">
+          <label class="btn-ghost file-btn">
+            Cambiar imagen
+            <input type="file" accept="image/*" class="image-input">
+          </label>
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <h2>Imágenes (galería)</h2>
+        <p class="admin-hint">Subí, borrá o reordená las fotos de la sección "Imágenes".</p>
+        <label class="btn btn-primary file-btn">
+          Subir foto nueva
+          <input type="file" accept="image/*" id="org-gallery-upload-input">
+        </label>
+        <div id="org-gallery-admin-grid" class="gallery-admin-grid"></div>
+      </div>
+
+      <div class="admin-card">
+        <h2>Mensajes de contacto</h2>
+        <p class="admin-hint">Lo que la gente envía desde el formulario de organizacion.salonesleprett.com.</p>
+        <div id="org-messages-list" class="messages-list"></div>
       </div>
     </section>
 
