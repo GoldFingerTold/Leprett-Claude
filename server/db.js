@@ -155,7 +155,8 @@ const DEFAULT_ORG_CONTENT = {
 
   contact_heading: 'Contacto',
   contact_subheading: 'Contanos sobre tu evento y te respondemos a la brevedad.',
-  contact_phone: '11-5517-3337',
+  contact_phone: '11-6895-1017',
+  contact_phone_2: '11-5517-3337',
   contact_email: 'alicia@salonesleprett.com',
 
   footer_text: 'Leprett — Organización de Eventos'

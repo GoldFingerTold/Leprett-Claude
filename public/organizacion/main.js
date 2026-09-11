@@ -196,7 +196,8 @@ async function loadSite() {
   setText('footer-text', content.footer_text);
   document.getElementById('footer-year').textContent = String(new Date().getFullYear());
 
-  const phoneEmail = [content.contact_phone, content.contact_email].filter(Boolean).join(' — ');
+  const phones = [content.contact_phone, content.contact_phone_2].filter(Boolean).join(' / ');
+  const phoneEmail = [phones, content.contact_email].filter(Boolean).join(' — ');
   setText('footer-contact', phoneEmail);
 
   const banner = document.getElementById('banner-image');
