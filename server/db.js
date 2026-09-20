@@ -31,6 +31,7 @@ async function connect() {
 
 async function ensureIndexes() {
   await db.collection('gallery_images').createIndex({ position: 1 });
+  await db.collection('banner_gallery_images').createIndex({ position: 1 });
   await db.collection('social_links').createIndex({ position: 1 });
   await db.collection('consultas').createIndex({ created_at: -1 });
   await db.collection('product_categories').createIndex({ position: 1 });
@@ -53,7 +54,14 @@ const DEFAULT_CONTENT = {
   nav_productos_label: 'Precios',
   nav_contacto_label: 'Contacto',
 
+  // Tipo de portada: 'image' (foto, de siempre), 'video' (un archivo subido o un link
+  // externo pegado) o 'gallery' (varias fotos con transición automática). Default
+  // 'image' a propósito, así el contenido ya cargado sigue mostrando la foto de
+  // siempre sin que haga falta tocar nada.
+  banner_media_type: 'image',
   banner_image: '/img/seed/banner-1.jpg',
+  banner_video_url: '',
+  banner_video_file: '',
   banner_title: 'Salones Leprett',
   banner_subtitle: 'Un concepto moderno y diferente que combina estilo, distinción y confort, con profesionalismo y tecnología de vanguardia.',
 

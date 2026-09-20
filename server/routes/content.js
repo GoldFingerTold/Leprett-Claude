@@ -24,10 +24,17 @@ router.get('/', asyncHandler(async (req, res) => {
     .sort({ position: 1, _id: 1 })
     .toArray();
 
+  const bannerGallery = await mongo
+    .collection('banner_gallery_images')
+    .find({}, { projection: { url: 1, alt_text: 1 } })
+    .sort({ position: 1, _id: 1 })
+    .toArray();
+
   res.json({
     content,
     gallery: gallery.map(({ _id, url, alt_text }) => ({ id: _id, url, alt: alt_text })),
-    social: social.map(({ _id, platform, label, url }) => ({ id: _id, platform, label, url }))
+    social: social.map(({ _id, platform, label, url }) => ({ id: _id, platform, label, url })),
+    bannerGallery: bannerGallery.map(({ _id, url, alt_text }) => ({ id: _id, url, alt: alt_text }))
   });
 }));
 

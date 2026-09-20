@@ -34,6 +34,32 @@ function withMulterErrors(field) {
   };
 }
 
+// Video de portada: archivo subido directamente (además de la opción de pegar un link
+// de YouTube/Instagram). Límite más alto que las imágenes - nginx en el VPS ya permite
+// hasta 64MB globales, así que no hace falta tocar nada de infraestructura.
+const VIDEO_ALLOWED_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
+
+const videoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 40 * 1024 * 1024 }, // 40MB
+  fileFilter: (req, file, cb) => {
+    if (!VIDEO_ALLOWED_TYPES.has(file.mimetype)) {
+      return cb(new Error('Formato de video no soportado. Usá MP4, WEBM o MOV.'));
+    }
+    cb(null, true);
+  }
+});
+
+function withVideoMulterErrors(field) {
+  const mw = videoUpload.single(field);
+  return (req, res, next) => {
+    mw(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message });
+      next();
+    });
+  };
+}
+
 // ---------- Textos ----------
 
 router.get('/content', asyncHandler(async (req, res) => {
@@ -60,6 +86,20 @@ router.put('/content', asyncHandler(async (req, res) => {
 router.post('/content/image', withMulterErrors('image'), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
   const cloudResult = await uploadBuffer(req.file.buffer, 'leprett/content');
+  const url = cloudResult.secure_url;
+
+  const { key } = req.body || {};
+  if (key) {
+    await db.getDb().collection('content').updateOne({ _id: 'main' }, { $set: { [key]: url } }, { upsert: true });
+  }
+
+  res.json({ ok: true, url });
+}));
+
+// Video de portada subido como archivo (en vez de un link externo pegado).
+router.post('/content/video', withVideoMulterErrors('video'), asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se recibió ningún video.' });
+  const cloudResult = await uploadBuffer(req.file.buffer, 'leprett/content', 'video');
   const url = cloudResult.secure_url;
 
   const { key } = req.body || {};
@@ -111,6 +151,49 @@ router.put('/gallery/reorder', asyncHandler(async (req, res) => {
     updateOne: { filter: { _id: new ObjectId(id) }, update: { $set: { position: index } } }
   }));
   if (ops.length > 0) await db.getDb().collection('gallery_images').bulkWrite(ops);
+
+  res.json({ ok: true });
+}));
+
+// ---------- Galería de portada (modo "galería" del hero) ----------
+// Mismo patrón que la galería general de arriba, pero en su propia colección - así el
+// cliente cura una selección chica y específica para la portada sin mezclarla con la
+// galería general del sitio.
+
+router.get('/banner-gallery', asyncHandler(async (req, res) => {
+  const items = await db.getDb().collection('banner_gallery_images').find().sort({ position: 1, _id: 1 }).toArray();
+  res.json({ items: items.map(({ _id, url, alt_text, position }) => ({ id: _id, url, alt: alt_text, position })) });
+}));
+
+router.post('/banner-gallery', withMulterErrors('image'), asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
+  const cloudResult = await uploadBuffer(req.file.buffer, 'leprett/banner-gallery');
+  const url = cloudResult.secure_url;
+  const alt = (req.body && req.body.alt) || '';
+
+  const mongo = db.getDb();
+  const last = await mongo.collection('banner_gallery_images').find().sort({ position: -1 }).limit(1).toArray();
+  const nextPos = last.length > 0 ? last[0].position + 1 : 0;
+
+  const inserted = await mongo.collection('banner_gallery_images').insertOne({ url, alt_text: alt, position: nextPos });
+
+  res.json({ ok: true, id: inserted.insertedId, url });
+}));
+
+router.delete('/banner-gallery/:id', asyncHandler(async (req, res) => {
+  const result = await db.getDb().collection('banner_gallery_images').deleteOne({ _id: new ObjectId(req.params.id) });
+  if (result.deletedCount === 0) return res.status(404).json({ error: 'No existe esa imagen.' });
+  res.json({ ok: true });
+}));
+
+router.put('/banner-gallery/reorder', asyncHandler(async (req, res) => {
+  const { order } = req.body || {};
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'Falta el array "order".' });
+
+  const ops = order.map((id, index) => ({
+    updateOne: { filter: { _id: new ObjectId(id) }, update: { $set: { position: index } } }
+  }));
+  if (ops.length > 0) await db.getDb().collection('banner_gallery_images').bulkWrite(ops);
 
   res.json({ ok: true });
 }));

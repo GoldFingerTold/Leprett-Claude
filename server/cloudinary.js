@@ -22,9 +22,10 @@ cloudinary.config({
 
 // Sube un buffer en memoria (viene de multer con memoryStorage, no diskStorage) y
 // devuelve el resultado de Cloudinary - lo que importa es result.secure_url.
-function uploadBuffer(buffer, folder) {
+// resourceType: 'image' (default) o 'video', para la portada en video.
+function uploadBuffer(buffer, folder, resourceType = 'image') {
   return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream({ folder }, (err, result) => {
+    const stream = cloudinary.uploader.upload_stream({ folder, resource_type: resourceType }, (err, result) => {
       if (err) return reject(err);
       resolve(result);
     });

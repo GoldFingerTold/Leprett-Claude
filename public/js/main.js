@@ -223,11 +223,177 @@ function initConsultaForm() {
   });
 }
 
+// ---------- Portada: foto / video / galería ----------
+
+// Acepta un link de YouTube (watch, youtu.be, shorts, o ya embed) o de Instagram (reel o
+// post). YouTube sí deja mostrar un iframe simple apuntando a /embed/ID. Instagram NO -
+// aunque no tire un error de bloqueo, tiene un script que saca de la ventana a quien lo
+// mira - así que para Instagram hay que usar su widget oficial (embed.js), no un iframe
+// a mano. Por eso acá se devuelve la plataforma además del link ya normalizado.
+function parseVideoUrl(url) {
+  if (!url) return null;
+  const trimmed = url.trim();
+
+  let match =
+    trimmed.match(/youtu\.be\/([a-zA-Z0-9_-]{6,})/) ||
+    trimmed.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{6,})/) ||
+    trimmed.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{6,})/) ||
+    trimmed.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);
+  if (match) {
+    return {
+      platform: 'youtube',
+      videoId: match[1],
+      embedUrl: `https://www.youtube.com/embed/${match[1]}`,
+      vertical: /youtube\.com\/shorts\//.test(trimmed)
+    };
+  }
+
+  match = trimmed.match(/instagram\.com\/(reel|p)\/([a-zA-Z0-9_-]+)/);
+  if (match) {
+    const [, kind, id] = match;
+    return {
+      platform: 'instagram',
+      permalink: `https://www.instagram.com/${kind}/${id}/`,
+      vertical: kind === 'reel'
+    };
+  }
+
+  return null;
+}
+
+// El widget oficial de Instagram: un <blockquote> con el link, más su script embed.js
+// que lo transforma en un iframe real - carga el script una sola vez (si ya está
+// cargado, solo hay que pedirle que reprocese los bloques nuevos).
+let instagramScriptPromise = null;
+function loadInstagramEmbedScript() {
+  if (window.instgrm) return Promise.resolve();
+  if (!instagramScriptPromise) {
+    instagramScriptPromise = new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://www.instagram.com/embed.js';
+      script.async = true;
+      script.onload = resolve;
+      document.body.appendChild(script);
+    });
+  }
+  return instagramScriptPromise;
+}
+
+function renderInstagramEmbed(container, permalink) {
+  container.innerHTML =
+    `<blockquote class="instagram-media" data-instgrm-permalink="${permalink}" data-instgrm-version="14"></blockquote>`;
+  loadInstagramEmbedScript().then(() => {
+    if (window.instgrm && window.instgrm.Embeds) window.instgrm.Embeds.process();
+  });
+}
+
+// Arma un embed de video a partir de un link externo pegado por el admin (YouTube o
+// Instagram, vía parseVideoUrl). options.autoplayLoop agrega los parámetros de YouTube
+// para que se reproduzca solo, en loop, sin controles - pensado para la portada, que
+// tiene que comportarse como un video de fondo, no uno para reproducir a mano.
+function renderVideoEmbed({ videoWrap, videoEl, igWrap }, videoUrl, options = {}) {
+  if (!videoUrl) {
+    videoWrap.hidden = true;
+    return { vertical: false };
+  }
+  const parsed = parseVideoUrl(videoUrl);
+
+  if (parsed && parsed.platform === 'instagram') {
+    videoEl.hidden = true;
+    videoEl.src = '';
+    igWrap.hidden = false;
+    renderInstagramEmbed(igWrap, parsed.permalink);
+  } else {
+    igWrap.hidden = true;
+    igWrap.innerHTML = '';
+    videoEl.hidden = false;
+    let src = parsed ? parsed.embedUrl : videoUrl;
+    if (options.autoplayLoop && parsed && parsed.platform === 'youtube') {
+      src += `?autoplay=1&mute=1&loop=1&playlist=${parsed.videoId}&controls=0&modestbranding=1&playsinline=1&rel=0`;
+    }
+    videoEl.src = src;
+  }
+
+  videoWrap.hidden = false;
+  return { vertical: Boolean(parsed && parsed.vertical) };
+}
+
+// Portada en modo "galería": cross-fade automático entre varias fotos. Sin librería -
+// un <img> de fondo por foto superpuestos, alternando cuál está "activa" con una
+// transición de opacity en CSS (ver .hero-gallery-slide en style.css).
+let heroGalleryTimer = null;
+function stopHeroGalleryRotator() {
+  if (heroGalleryTimer) {
+    clearInterval(heroGalleryTimer);
+    heroGalleryTimer = null;
+  }
+}
+function startHeroGalleryRotator(container, items) {
+  container.innerHTML = '';
+  items.forEach((item, i) => {
+    const img = document.createElement('img');
+    img.src = resolveImageUrl(item.url);
+    img.alt = item.alt || '';
+    img.className = 'hero-gallery-slide' + (i === 0 ? ' active' : '');
+    container.appendChild(img);
+  });
+  container.hidden = false;
+
+  if (items.length <= 1) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  let index = 0;
+  heroGalleryTimer = setInterval(() => {
+    const slides = container.querySelectorAll('.hero-gallery-slide');
+    slides[index].classList.remove('active');
+    index = (index + 1) % slides.length;
+    slides[index].classList.add('active');
+  }, 4500);
+}
+
+// Portada: foto (de siempre), video (archivo subido o link externo pegado), o galería
+// con transición automática - según banner_media_type.
+function renderHero(content, bannerGallery) {
+  const img = document.getElementById('banner-image');
+  const video = document.getElementById('banner-video');
+  const videoWrap = document.getElementById('banner-video-wrap');
+  const videoEmbed = document.getElementById('banner-video-embed');
+  const igWrap = document.getElementById('banner-instagram');
+  const galleryEl = document.getElementById('banner-gallery');
+
+  img.hidden = true;
+  video.hidden = true;
+  video.pause();
+  video.removeAttribute('src');
+  videoWrap.hidden = true;
+  videoEmbed.src = '';
+  galleryEl.hidden = true;
+  stopHeroGalleryRotator();
+
+  const mediaType = content.banner_media_type || 'image';
+
+  if (mediaType === 'video' && content.banner_video_file) {
+    video.src = content.banner_video_file;
+    video.hidden = false;
+    return;
+  }
+  if (mediaType === 'video' && content.banner_video_url) {
+    renderVideoEmbed({ videoWrap, videoEl: videoEmbed, igWrap }, content.banner_video_url, { autoplayLoop: true });
+    return;
+  }
+  if (mediaType === 'gallery' && bannerGallery && bannerGallery.length > 0) {
+    startHeroGalleryRotator(galleryEl, bannerGallery);
+    return;
+  }
+  img.src = resolveImageUrl(content.banner_image) || '';
+  img.hidden = false;
+}
+
 // ---------- Carga inicial ----------
 
 async function loadSite() {
   const res = await fetch(apiUrl('/api/content'));
-  const { content, gallery, social } = await res.json();
+  const { content, gallery, social, bannerGallery } = await res.json();
 
   document.title = content.site_name || 'Salones Leprett';
   setText('nav-brand', content.site_name);
@@ -239,8 +405,7 @@ async function loadSite() {
   const emails = [content.contact_email, content.contact_email_2].filter(Boolean).join(' / ');
   setText('footer-contact', [content.contact_person, phones, emails].filter(Boolean).join(' — '));
 
-  const banner = document.getElementById('banner-image');
-  if (banner) banner.src = resolveImageUrl(content.banner_image) || '';
+  renderHero(content, bannerGallery);
   setText('banner-title', content.banner_title);
   setText('banner-subtitle', content.banner_subtitle);
 

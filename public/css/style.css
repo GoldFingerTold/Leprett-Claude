@@ -153,6 +153,44 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 700; line-height: 1.
 .hero { position: relative; min-height: 90vh; display: flex; align-items: flex-end; overflow: hidden; }
 .hero-media { position: absolute; inset: 0; z-index: -1; }
 .hero-img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Portada en modo video: un archivo subido llena el fondo igual que la foto; un link
+   externo (YouTube/Instagram) usa un iframe estirado a absolute/inset:0 para que ocupe
+   todo el alto del hero. */
+.hero-video { width: 100%; height: 100%; object-fit: cover; }
+.video-frame { position: relative; aspect-ratio: 16 / 9; }
+.video-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.hero-video-frame.video-frame { position: absolute; inset: 0; aspect-ratio: auto; overflow: hidden; }
+/* El iframe de YouTube no soporta object-fit: cover (el player interno respeta el 16:9
+   del video y deja franjas si el marco no es esa proporción) - se lo sobredimensiona en
+   base al viewport y se centra, para que el video desborde el marco en vez de dejar
+   barras, igual que el truco clásico de "video de fondo" con YouTube. */
+.hero-video-frame.video-frame iframe {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100vw;
+  height: 56.25vw; /* 100 * 9/16 */
+  min-height: 100%;
+  min-width: 177.78vh; /* 100 * 16/9 */
+  transform: translate(-50%, -50%);
+  border: 0;
+}
+/* El widget de Instagram arma su propio iframe con un ancho fijo por inline style -
+   esto lo recentra y lo deja encoger dentro del marco en vez de desbordar. */
+.instagram-embed-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.instagram-embed-wrap iframe { max-width: 100% !important; }
+
+/* Portada en modo galería: fotos superpuestas ocupando todo el hero, solo la ".active"
+   visible - el cambio entre una y otra es un fade de opacity. */
+.hero-gallery { position: absolute; inset: 0; }
+.hero-gallery-slide {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; opacity: 0; transition: opacity 1.2s ease;
+}
+.hero-gallery-slide.active { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .hero-gallery-slide { transition: none; } }
+
 .hero-veil {
   position: absolute;
   inset: 0;
